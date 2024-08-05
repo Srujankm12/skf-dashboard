@@ -6,7 +6,7 @@
     let data;
     let socket;
     let options;
-    let historicalData = {}; // Object to store temperature data by hour
+    let historicalData = []; // Array to store temperature data
 
     onMount(() => {
         // Load Google Charts
@@ -19,18 +19,13 @@
         function initChart() {
             console.log('Initializing chart...');
             data = new google.visualization.DataTable();
-            data.addColumn('number', 'Hour');
+            data.addColumn('datetime', 'Time'); // Use 'datetime' for time-based data
             data.addColumn('number', 'Temperature');
-
-            // Initialize DataTable with empty values for 24 hours
-            for (let i = 0; i < 24; i++) {
-                data.addRow([i, null]);
-            }
 
             options = {
                 hAxis: {
-                    title: 'Hour of the Day',
-                    ticks: Array.from({ length: 24 }, (_, i) => ({ v: i, f: i + ':00' }))
+                    title: 'Time',
+                    format: 'HH:mm:ss', // Format the time on the X-axis
                 },
                 vAxis: {
                     title: 'Temperature (°C)',
@@ -40,7 +35,9 @@
                     }
                 },
                 curveType: 'function',
-                legend: { position: 'bottom' }
+                legend: { position: 'bottom' },
+                pointsVisible: true, // Ensure points are visible
+                pointSize: 5 // Set the size of the points
             };
 
             chart = new google.visualization.LineChart(document.getElementById('chart_div'));
@@ -51,16 +48,15 @@
         function setupSocket() {
             // Connect to the WebSocket server
             console.log('Setting up socket connection...');
-            socket = io('http://localhost:3000');
+            socket = io('http://34.47.150.239:3000');
 
             socket.on('connect', () => {
                 console.log('Connected to WebSocket server');
             });
 
             socket.on('data', (tempData) => {
-                const currentHour = new Date().getHours();
                 console.log('Received temperature data:', tempData);
-                addDataPoint(currentHour, parseFloat(tempData.temp));
+                addDataPoint(new Date(), parseFloat(tempData.temp));
             });
 
             socket.on('disconnect', () => {
@@ -72,27 +68,17 @@
             });
         }
 
-        function addDataPoint(hour, temperature) {
-            console.log('Adding data point at hour:', hour, 'with temperature:', temperature);
+        function addDataPoint(time, temperature) {
+            console.log('Adding data point at time:', time, 'with temperature:', temperature);
 
-            // Ensure hour is within valid range
-            if (hour < 0 || hour >= 24) {
-                console.error('Invalid hour received:', hour);
-                return;
-            }
-
-            // Update the historical data object
-            historicalData[hour] = temperature;
+            // Update the historical data array
+            historicalData.push([time, temperature]);
 
             // Clear existing rows and add updated rows
             data.removeRows(0, data.getNumberOfRows());
-            for (let i = 0; i < 24; i++) {
-                if (historicalData[i] !== undefined) {
-                    data.addRow([i, historicalData[i]]);
-                } else {
-                    data.addRow([i, null]); // Keep the row for hours without data
-                }
-            }
+            historicalData.forEach(point => {
+                data.addRow([point[0], point[1]]);
+            });
 
             // Redraw the chart
             chart.draw(data, options);
